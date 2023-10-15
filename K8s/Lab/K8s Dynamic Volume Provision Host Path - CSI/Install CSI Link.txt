@@ -1,0 +1,1 @@
+https://kubesphere.io/docs/v3.3/installing-on-linux/persistent-storage-configurations/install-ceph-csi-rbd/

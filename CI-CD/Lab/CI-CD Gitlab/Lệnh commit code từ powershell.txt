@@ -1,0 +1,1 @@
+$VERSION="v70.8"; git add .; git commit -am "Bump version to $VERSION"; git tag -a $VERSION -m "Update version to $VERSION"; git push origin main $VERSION;

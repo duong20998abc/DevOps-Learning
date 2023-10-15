@@ -1,0 +1,166 @@
+Tạo volume bên trong Pod loại: emptyDir volume để share data giữ các containers:
+Tạo folder: mkdir volumetest && cd volumetest
+nano  podvolume.yaml
+-------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fortune
+spec:
+  containers:
+    - name: html-generator              # Contaienr này thay đổi dữ liệu trong volume chung
+      image: luksa/fortune
+      volumeMounts:
+        - name: html        # Mount volume vào thư mục /var/htdocs trong container 
+          mountPath: /var/htdocs
+    - name: web-server                   # container này đọc dữ liệu volume chung hiển thị thành web
+      image: nginx:alpine
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      volumeMounts:
+        - name: html #  mount volume  html vào thư mục /usr/share/nginx/html bên trong container
+          mountPath: /usr/share/nginx/html
+          readOnly: true
+  volumes:   #              định nghĩa volumes
+    - name: html  #           đặt tên volumes
+      emptyDir: {}   #       định nghĩa kiểu volume là emptyDir
+
+Chạy file manifest này: kubectl apply –f podvolume.yaml
+Kiểm tra lại : kubectl get pod –o wide
+Sẽ thấy tên pod :  fortune có 2/2 container bên trong
+Truy cập thử trang web của pod: curl http://ip của pod
+Xem log: kubectl logs fortune -c web-server
+Xem bên trong Pod chạy mấy container: kubectl describe pod fortune
+Truy cập vào bên trong container html-generator
+kubectl exec fortune -c html-generator -i –t  /bin/sh
+gõ lệnh:
+ls /var/htdocs  thấy file index.html là nội dung chia sẻ với container web-server   
+tạo thêm một file mới: touch /var/htdocs/text1.txt
+sau đó exit để thoát khỏi container này.
+Truy cập sang container thứ hai để kiểm tra:
+kubectl exec fortune -c web-server -i –t   /bin/sh
+df -h      # xem thêm dung lượng
+ls /usr/share/nginx/html/
+để thấy file text1.txt đã tạo bên container kia.
+Sau khi thoát khỏi container, trên máy node bên ngoài gõ: df -h để xem dung lượng của ổ emptyDir tương ứng với giới hạn dung lượng nào.
+
+Trong trường hợp ổ chia sẻ chung giữa 2 container cần tốc độ cao thì có thể tạo emptyDir là ổ trên RAM với thông số như sau:
+
+volumes:   #              định nghĩa volumes
+    - name: html  #           đặt tên volumes
+      emptyDir:    #       định nghĩa kiểu volume là emptyDir
+        medium: "Memory"       # và là ổ trên ram
+        sizeLimit: 2Mi                  # giới hạn dung lượng
+		
+		
+Lab: Triển khai tạo PV kết nối đến một máy chủ NFS chia sẻ file ( có thể là NAS thông thường)
+Cài đặt NFS server trên máy EC2 (ansible) :
+sudo apt update 
+sudo apt install nfs-kernel-server
+Tạo thư mục để chia sẻ và phân quyền mọi user được truy cập:
+sudo mkdir -p /data/mydata
+sudo chown -R nobody:nogroup /data/mydata
+sudo chmod -R 777 /data/mydata
+
+Tạo file exports để khai báo thư mục chia sẻ:
+nano /etc/exports
+và thêm dòng: 
+/data/mydata  *(rw,sync,no_subtree_check,insecure)
+Sau đó lưu lại và tiến hành chia sẻ:
+sudo exportfs -a
+
+Khởi động lại dịch vụ:
+sudo systemctl restart nfs-kernel-server
+
+Mở cổng firewall (nếu EC2 thì mở cổng Security group)
+sudo ufw allow from 0.0.0.0/0 to any port nfs
+(cho phép tất cả IP đi qua FW với port nfs – Tuy nhiên không cần gõ lệnh này do EC2 không bật ufw) 
+Trên các k8s node, cần cài sudo apt install nfs-common  là NFS client để kết nối đến ổ mạng
+Bước 1: Tạo PersistentVolume NFS:
+
+Trên Master Node, tạo file : nano pv-create-nfs.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv1
+spec:
+  storageClassName: nfsstorageclass
+  capacity:
+    storage: 3Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    path: "/data/mydata/"
+    server: "172.16.13.2"       # đây là IP của EC2 CentOS NFS
+
+chạy file tạo PV này: 
+kubectl apply -f pv-create-nfs.yaml
+kubectl get pv -o wide
+kubectl describe pv/pv1
+Chú ý cột: RECLAIM POLICY là Retain:  Nghĩa là khi xóa PVC trỏ vào PV thì PV vẫn giữ nguyên dữ liệu
+
+
+Bước 2: Tạo PersistentVolumeClaim NFS:
+nano pvc-nfs.yaml
+
+apiVersion: v1
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc1
+spec:
+  storageClassName: nfsstorageclass
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi
+
+Save lại  và chạy: 
+kubectl apply -f pvc-nfs.yaml
+kubectl get pvc,pv -o wide
+
+Bước 3: Tạo Pod sử dụng PV tạo ở trên:
+
+Trên máy NFS, vào thư mục: /data/mydata tạo một file HTML: index.html với nội dung:
+<h1>This file on NFS PersistentVolume <h1>
+
+Tạo file chạy Pod httpd chạy trang web trên: nano apache-https.yaml 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpd
+  labels:
+    app: httpd
+spec:                                                     # các thông số của Deployment này
+  replicas: 1
+  selector:
+    matchLabels:
+      app: httpd
+  template:                                               # Đây là Template để tạo ra Pod
+    metadata:
+      labels:
+        app: httpd
+    spec:                                                  # Các thông số của Pod sẽ được tạo ra
+      volumes:                                               # Tạo volume trong Pod
+        - name: htdocs
+          persistentVolumeClaim:
+            claimName: pvc1                               # PVC đã tạo sẵn ở bước 2
+      containers:
+      - name: app
+        image: httpd                                      # container chạy image httpd
+        resources:
+          limits:
+            memory: "100M"
+            cpu: "100m"
+        ports:
+          - containerPort: 80
+        volumeMounts:                                   # mount volume tạo phía trên vào container
+          - mountPath: /usr/local/apache2/htdocs/
+            name: htdocs
+Sau đó lưu lại và chạy:
+
+kubectl apply -f apache-https.yaml
+kubectl get pod –o wide 
+Truy cập thử pod:   curl http://ip của Pod

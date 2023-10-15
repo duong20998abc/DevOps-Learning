@@ -1,0 +1,4 @@
+﻿Layer2 là chuyển Frame dựa trên địa chỉ Mac, còn Layer3 chuyển gói tin bằng địa chỉ IP
+
+Hướng dẫn cấu hình VxLAN Bridging trên Switch Cisco Nexus:
+https://cnttshop.vn/blogs/cisco/huong-dan-cau-hinh-vxlan-bridging-tren-switch-cisco-nexus

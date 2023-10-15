@@ -1,0 +1,73 @@
+image: docker
+services:
+  - docker:dind
+stages:
+  - build-dev
+  - deploy-dev
+  - build-prod
+  - deploy-prod
+build-dev: 
+  stage: build-dev
+  rules: 
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+  script:
+    - env
+    - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
+    - pwd && ls -la
+    - docker build -t $CI_REGISTRY_IMAGE . 
+    - docker push $CI_REGISTRY_IMAGE
+deploy-dev:
+  stage: deploy-dev
+  needs: [build-dev]
+  rules: 
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+  script:
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d  '\r' | ssh-add -
+    - ssh-keyscan -H $SSH_SERVER_IP_TEST >> ~/.ssh/known_hosts
+    - chmod 600 ~/.ssh/known_hosts
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "echo $CI_REGISTRY_PASSWORD | sudo docker login -u $CI_REGISTRY_USER $CI_REGISTRY --password-stdin"
+    - pwd && ls -la
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "rm -rf docker-compose.yml"
+    - scp docker-compose.yml ubuntu@${SSH_SERVER_IP_TEST}:/home/ubuntu/
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "pwd && ls -la"
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "sudo docker-compose down"
+    - sleep 10s
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "sudo docker image prune --force"
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "echo 'sudo docker-compose up -d' | bash -s &"
+build-prod:
+  stage: build-prod
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      changes: 
+        - main
+  script:
+    - env
+    - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
+    - pwd && ls -la
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG .
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG
+deploy-prod:
+  stage: deploy-prod
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      changes:
+        - main
+  script:
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d  '\r' | ssh-add -
+    - ssh-keyscan -H $SSH_SERVER_IP_PRODUCTION >> ~/.ssh/known_hosts
+    - chmod 600 ~/.ssh/known_hosts
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_PRODUCTION} "echo $CI_REGISTRY_PASSWORD | sudo docker login -u $CI_REGISTRY_USER $CI_REGISTRY --password-stdin"
+    - pwd && ls -la
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_PRODUCTION} "rm -rf docker-compose.yml"
+    - scp docker-compose.yml ubuntu@${SSH_SERVER_IP_PRODUCTION}:/home/ubuntu/
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_PRODUCTION} "sed -i 's|___IMAGE___|$CI_REGISTRY_IMAGE:$CI_COMMIT_TAG|g' docker-compose.yml"
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_PRODUCTION} "pwd && ls -la"
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_PRODUCTION} "docker container prune --force"
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_PRODUCTION} "docker image prune --force"
+    - ssh ${SSH_USER}@${SSH_SERVER_IP_PRODUCTION} "docker stack deploy --compose-file docker-compose.yml $DOCKER_SWARM_NAME"

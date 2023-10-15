@@ -1,0 +1,52 @@
+image: docker:latest
+services:
+  - docker:dind
+stages:
+  - dev build
+  - helmpackages
+  - deploy
+  
+
+dev build:
+    only:
+      - dev
+    stage: dev build
+    script:
+      - env
+      - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
+      - echo $TAG_IMAGE_DEV
+      - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME .
+      - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+
+#jod helm packages
+helmpackages:
+    only:
+      - dev
+    stage: helmpackages
+    script:
+      - echo "Packaging helm chart..."
+      - apk add helm
+      - apk add git
+      - helm package nodedeployapi
+      - helm plugin install https://github.com/chartmuseum/helm-push
+      - helm repo add vinhnp --username $CI_REGISTRY_USER --password $CI_REGISTRY_PASSWORD $HELM_REPO_URL
+      - helm repo update
+      - helm cm-push nodedeployapi/ vinhnp
+      - pwd && ls
+
+delpoy-jod:
+    only:
+      - dev
+    stage: deploy
+    script:
+      - eval $(ssh-agent -s)
+      - mkdir -p ~/.ssh
+      - chmod 700 ~/.ssh
+      - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+      - ssh-keyscan -H $SSH_SERVER_IP_TEST >> ~/.ssh/known_hosts
+      - chmod 600 ~/.ssh/known_hosts
+      - pwd && ls -la
+      - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "helm repo add $RELEASE_NAME --username $CI_REGISTRY_USER --password $CI_REGISTRY_PASSWORD $HELM_REPO_URL"
+      - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "helm repo update"
+      - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "helm upgrade --install $RELEASE_NAME $REPO_NAME/$CHART_NAME -n $NAME_SPACE --create-namespace"
+      - ssh ${SSH_USER}@${SSH_SERVER_IP_TEST} "kubectl rollout restart deploy -n $NAME_SPACE"

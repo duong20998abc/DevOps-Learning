@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pyapp-deployment
+spec:
+  selector:
+    matchLabels:
+      app: pyapp
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: pyapp
+    spec:
+      imagePullSecrets:
+        - name: registry-pnh-secret
+      containers:
+        - name: pyapp
+          image: registry.gitlab.com/tgpham26/pnhappproject:latest
+          ports:
+          - containerPort: 3000
+          env:
+            - name: DB_HOST
+              value: 10.0.4.229
+            - name: DB_USER
+              value: root
+            - name: DB_PASS
+              value: a123456
