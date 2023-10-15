@@ -1,0 +1,25 @@
+{
+  "name": "monorepo",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ]
+  },
+  "scripts": {
+    "api": "yarn workspace server dev",
+    "api build": "yarn workspace server build"
+  },
+  "dependencies": {
+    "axios": "^0.27.2",
+    "concurrently": "^7.2.2",
+    "cross-env": "^7.0.3",
+    "lodash": "^4.17.21",
+    "moment": "^2.29.3",
+    "socket.io": "^4.5.1",
+    "uuid": "^8.3.2"
+  }
+}
