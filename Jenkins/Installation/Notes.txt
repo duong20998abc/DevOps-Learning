@@ -1,0 +1,3 @@
+Lưu ý:
+
+1. Khi chạy docker trong pipeline mà báo permission denied thì phải sudo -i xong su jenkins -> cho phép user Jenkins chạy được Docker
