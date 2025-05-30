@@ -1,0 +1,49 @@
+{{- $dot := . }}
+{{- range $croName, $val := .Values.cronJob }}
+{{- $value := $val | default dict }}
+{{- if $value.create }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $croName }}
+  namespace: {{ include "actaspg2.fullname" $dot }}
+spec:
+  schedule: {{ $value.schedule}}
+  successfulJobsHistoryLimit: {{ $value.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $value.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: {{- toYaml $value.ttlSecondsAfterFinished | indent 1 }}
+      template:
+        spec:
+          serviceAccountName: {{ include "actaspg2.serviceAccountName" $dot }}
+          containers:
+          - name: {{ $croName }}
+            image: {{ $value.image }}
+            command:
+            {{- toYaml $value.command | nindent 12 }}
+            {{ end }}
+            resources:
+              limits:
+                cpu: 16m
+                memory: 128Mi
+              requests:
+                cpu: 16m
+                memory: 32Mi
+          {{- with $.Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $.Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $.Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          restartPolicy: OnFailure
+{{ end }}
+{{ end }}
+          

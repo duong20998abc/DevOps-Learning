@@ -1,0 +1,23 @@
+{{- range .Values.keda }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: scaleobject-{{ .scaleTargetRef.kind }}-{{ .scaleTargetRef.name }}
+  namespace: {{ $.Values.fullNameOverride }}
+spec: 
+  scaleTargetRef:
+    name: {{ $.Values.fullNameOverride }}-{{ .scaleTargetRef.name }}
+    kind: {{ .scaleTargetRef.kind | default "Deployment" }}
+  minReplicaCount: {{ .minReplicaCount | default 3 }}
+  maxReplicaCount: {{ .maxReplicaCount | default 3 }}
+  pollingInterval: {{ .pollingInterval | default 30 }} # Khoang thoi gian (tinh bang giay) de KEDA kiem tra dieu kien cac trigger
+  initialCooldownPeriod: {{ .initialCooldownPeriod | default 0 }}
+  cooldownPeriod: {{ .cooldownPeriod | default 300 }} # Thoi gian cho (tinh bang giay) truoc khi giam so luong replicas
+  triggers:
+  {{- range .triggers }}
+    - type: {{ .type }}
+      metadata:
+      {{- toYaml .metadata | indent 8 }}
+  {{- end }}
+---
+{{- end }}

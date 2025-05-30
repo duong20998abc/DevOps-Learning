@@ -1,0 +1,22 @@
+{{- $dot := .}}
+{{- range $serviceGroup := .Values.apps }}
+{{- range $key,$val := $serviceGroup.services }}
+{{- $value := $val | default dict }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: actaspg2-{{ $key }}-svc
+  labels:
+    app: actaspg2-{{ $key }}
+spec:
+  type: {{ $.Values.service.type }}
+  ports:
+    - port: {{ $.Values.service.port }}
+      targetPort: {{ $.Values.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    app: actaspg2-{{ $key }}
+{{- end }}
+{{- end }}

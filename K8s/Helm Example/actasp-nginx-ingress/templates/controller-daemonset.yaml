@@ -1,0 +1,30 @@
+{{- if eq .Values.controller.kind "daemonset" }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ default (include "nginx-ingress.name" .) .Values.controller.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "nginx-ingress.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ include "nginx-ingress.appName" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "nginx-ingress.appName" . }}
+# {{- if .Values.nginxServiceMesh.enable }}
+#         nsm.nginx.com/daemonset: {{ default (include "nginx-ingress.name" .) .Values.controller.name }}
+#         spiffe.io/spiffeid: "true"
+# {{- end }}
+{{- if .Values.controller.pod.extraLabels }}
+{{ toYaml .Values.controller.pod.extraLabels | indent 8 }}
+{{- end }}
+{{- if or .Values.prometheus.create (or .Values.controller.pod.annotations .Values.nginxServiceMesh.enable) }}
+      annotations:
+{{- if .Values.prometheus.create }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.prometheus.port }}"
+        prometheus.io/scheme: "{{ .Values.prometheus.scheme }}"
+{{- end }}

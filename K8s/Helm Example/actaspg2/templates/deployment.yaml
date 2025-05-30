@@ -1,0 +1,78 @@
+{{- $dot := .}}
+{{- range $serviceGroup := .Values.apps }}
+{{- range $key,$val := $serviceGroup.services }}
+{{- $value := $val | default dict }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Values.fullnameOverride }}-{{ $key }}
+  labels:
+    {{- include "actaspg2.labels" $dot | nindent 4 }}
+spec:
+{{- if not $.Values.autoscaling.enabled }}
+  replicas: {{ ($value.replicaCount | default $serviceGroup.replicaCount) | default $.Values.replicaCount }}
+{{- end }}
+  revisionHistoryLimit: {{ $.Values.image.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app: {{ $.Values.fullnameOverride }}-{{ $key }}
+  template:
+    metadata:
+    {{- with $.Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        app: {{ $.Values.fullnameOverride }}-{{ $key }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "actaspg2.serviceAccountName" $dot }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      volumes:
+      - name: config-volume
+        configMap:
+          name: actaspg2-config
+      - name: config-license
+        configMap:
+          name: actaspg2-config-license
+      containers:
+        - name: {{ $.Values.fullnameOverride }}-{{ $key }}
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          image: {{ $.Values.image.repoPrefix }}{{ $value.image | default $key }}:{{ $value.tag | default $.Values.image.tag }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          volumeMounts:
+          - name: config-volume
+            mountPath: /app/Config/{{ $.Values.ASPNETCORE_ENVIRONMENT }}
+          - name: config-license
+            mountPath: /app/License/
+          resources:
+            {{- toYaml ($serviceGroup.resources | default $.Values.resources) | nindent 12 }}
+          env:
+          - name: ASPNETCORE_ENVIRONMENT
+            value: "{{ $.Values.ASPNETCORE_ENVIRONMENT }}"
+          - name: ELASTIC_APM_GLOBAL_LABELS
+            value: 'app_id=actasp'
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}    
+{{- end }}
+{{- end }}      

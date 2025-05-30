@@ -1,0 +1,55 @@
+{{- $fullName := include "actaspg2.fullName" . -}}
+
+{{- $connectTimeout := .Values.connectTimeout -}}
+{{- $sendTimeout := .Values.sendTimeout -}}
+{{- $readTimeout := .Values.readTimeout -}}
+{{- $clientMaxBodySize := .Values.clientMaxBodySize -}}
+
+{{- if semverCompare ">=1.14-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: k8s.nginx.org/v1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: VirtualServerRoute
+metadata:
+  name: {{ $fullName }}-api-local
+  namespace: {{ $fullName }}
+spec:
+  host: {{ .Values.hosts.apilocal }}
+  ingressClassName: {{ $.Values.ingressClass.name }}
+  upstreams:
+  - name: actaspg2-render1-svc
+    service: actaspg2-render1-svc
+    port: {{ .Values.render.portRender1 }}
+    connect-timeout: {{ .Values.render.connectTimeout | default $connectTimeout }}
+    send-timeout: {{ .Values.render.sendTimeout | default $sendTimeout }}
+    read-timeout: {{ .Values.render.readTimeout | default $readTimeout }}
+    client-max-body-size: {{ .Values.render.clientMaxBodySize | default $clientMaxBodySize }}
+  {{- range $serviceGroup := .Values.apps }}
+  {{- range $key,$val := $serviceGroup.services }}
+  {{- $value := $val | default dict }}
+  - name: actaspg2-{{ $key }}-svc
+    service: actaspg2-{{ $key }}-svc
+    port: 80
+    connect-timeout: {{ $value.connectTimeout | default $connectTimeout }}
+    send-timeout: {{ $value.sendTimeout | default $sendTimeout }}
+    read-timeout: {{ $value.readTimeout | default $readTimeout }}
+    client-max-body-size: {{ $value.clientMaxBodySize | default $clientMaxBodySize }}
+  {{- end }}
+  {{- end }}
+  subroutes:
+  - path: /g2/api/render
+    action: 
+      proxy:
+        upstream: actaspg2-render1-svc
+        rewritePath: /
+  {{- range $serviceGroup := .Values.apps }}
+  {{- range $key,$val := $serviceGroup.services }}
+  {{- $value := $val | default dict }}
+  - path: /g2/api/{{ $value.path | default $key }}/
+    action: 
+      proxy:
+        upstream: actaspg2-{{ $key }}-svc
+        rewritePath: /
+  {{- end }}
+  {{- end }}

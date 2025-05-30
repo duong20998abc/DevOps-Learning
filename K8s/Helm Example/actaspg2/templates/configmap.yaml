@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: actaspg2-config
+  namespace: actaspg2
+data:
+{{- if eq .Values.ASPNETCORE_ENVIRONMENT "Local" }}
+{{- (.Files.Glob "Local/Config/*").AsConfig | nindent 2 }}
+{{- else if eq .Values.ASPNETCORE_ENVIRONMENT "TestDC" }}
+{{- (.Files.Glob "TestDC/Config/*").AsConfig | nindent 2 }}
+{{- else if eq .Values.ASPNETCORE_ENVIRONMENT "ProductionDC" }}
+{{- (.Files.Glob "ProductionDC/Config/*").AsConfig | nindent 2 }}
+{{- end }}
+---

@@ -1,0 +1,23 @@
+---
+{{- $dot := . }}
+{{- if and .Values.storage .Values.storage.persistentVolumeClaim }}
+{{- range $volumeClaimName. $val := .Values.storage.persistentVolumeClaim }}
+{{- $value := $val | default dict }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $volumeClaimName }}
+spec:
+  storageClassName: {{ $value.storageClassName }}
+  accessModes:
+    {{- toYaml $value.accessModes | nindent 8 }}
+  {{- if $value.volumeName }}
+  volumeName: {{ $value.volumeName }}
+  {{- end }}
+  volumeMode: {{ $value.volumeMode }}
+  resources:
+    {{- toYaml $value.resources | nindent 12 }}
+---
+{{- end }}
+{{- end }}

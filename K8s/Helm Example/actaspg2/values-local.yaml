@@ -1,0 +1,140 @@
+replicaCount: 1
+
+imagePullSecrets: []
+nameOverride: actaspg2
+fullnameOverride: actaspg2
+
+connectTimeout: 130s
+readTimeout: 60s
+sendTimeout: 30s
+clientMaxBodySize: 5m
+
+image:
+  repoPrefix: 192.168.41.109/actasp/
+  pullPolicy: Always
+  tag: 70.0.0.52
+  revisionHistoryLimit: 1
+  
+ ASPNETCORE_ENVIRONMENT : Local
+ 
+ hosts:
+   api: actasp.misa.local
+   apilocal: actasp.misa.local
+   socket: actaspwebsocketg2.misa.local
+   
+ ingressClass:
+   name: actasp-nginx-ingress
+   
+ service:
+   type: ClusterIP
+   port: 80
+   targetPort: 8080
+   
+ apps:
+   beeServices:
+     services:
+       register:
+         replicaCount: 3
+         tag: 70.0.0.52
+     resources:
+       limits:
+         cpu: 500m
+         memory: 2048Mi
+         ephemeral-storage: 2048Mi
+       requests:
+         cpu: 16m
+         memory: 64Mi
+         ephemeral-storage: 64Mi
+         
+ workers: 
+   fishWorkers:
+     services:
+       searchworker:
+         tag: 70.0.0.52
+     resources:
+       limits: 
+         cpu: 500m
+         memory: 2048Mi
+       requests:
+         cpu: 16m
+         memory: 64Mi
+         
+render:
+  readTimeout: 300s
+  clientMaxBodySize: 1000m
+  ip: 192.168.41.141
+  portRender1: 8091
+  targetPort: 8091
+  
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 70
+  
+serviceAccount: 
+  create: true
+  annotations: {}
+  name: ''
+  
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+ 
+nodeSelector:
+  appCode: actasp
+   
+tolerations:
+- key: appCode
+  operator: Equal
+  value: actasp
+  effect: NoSchedule
+   
+affinity: {}
+ 
+namespace: actaspg2
+ 
+storage:
+  persistentVolume:
+    actaspg2-pv-volume:
+      storageClassName: nfs-client
+      labels:
+        type: NFS
+      volumeMode: Filesystem
+      accessModes:
+      - ReadWriteMany
+      reclaimPolicy: Retain
+      claimRef:
+        name: actaspg2-pv-volume-claim
+        namespace: actaspg2
+      capacity:
+        storage: 500Gi
+      nfs:
+        path: /mnt/nfs_share/actasp
+        server: 192.168.11.236
+        
+ persistenVolumeClaim:
+   actaspg2-pv-volume-claim:
+     storageClassName: nfs-client
+     volumeMode: Filesystem
+     volumeName: actaspg2-pv-volume
+     accessModes:
+     - ReadWriteMany
+     resources:
+       requests: 
+         storage: 500Gi
+         
+keda:
+- scaleTargetRef:
+    name: syncinvoicetaxworker
+  minReplicaCount: 1
+  maxReplcaCount: 2
+  initialCooldownPeriod: 0
+  cooldownPeriod: 600
+  triggers:
+  - type: rabbitmq
+    metadata:
+      host: amqp://actasp:12345678%40Abc@rabbitmq.misa.local:5672/ACTASP_HOST
+      queueName: ASP_QUEUE_SYNC_INVOICE_TAX_AUTHORITY_QC_G2
+      queueLength: '1000'
