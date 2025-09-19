@@ -14,7 +14,7 @@
     "api build": "yarn workspace server build"
   },
   "dependencies": {
-    "axios": "^0.27.2",
+    "axios": "^1.12.0",
     "concurrently": "^7.2.2",
     "cross-env": "^7.0.3",
     "lodash": "^4.17.21",
