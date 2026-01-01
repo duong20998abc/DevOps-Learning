@@ -18,7 +18,7 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "express": "^4.18.2",
+    "express": "^4.22.0",
     "express-promise-router": "^4.1.1",
     "express-rate-limit": "^7.0.1",
     "fast-jwt": "^3.2.0",
